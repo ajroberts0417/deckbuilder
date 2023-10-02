@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Stage, Sprite, withPixiApp } from '@pixi/react';
 import * as PIXI from 'pixi.js';
 import { useControls } from 'leva'
@@ -11,29 +11,32 @@ texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
 function useAdminControls<T extends Schema>(initialSchema: T): T {
   if (import.meta.env.VITE_ADMIN_MODE) {
     // @LIAM: what should I do instead here?
-    return useControls(initialSchema) as unknown as T;
+    return useControls(initialSchema, []) as unknown as T;
   }
   return initialSchema;
 }
 
 interface BunnyProps {
+  key: number
   x: number;
   y: number;
+  tint?: string;
   scale: number;
-  selected: PIXI.DisplayObject | null;
-  setSelected: (selected: PIXI.DisplayObject | null) => void;
+  selected: boolean
+  setSelected: () => void;
 }
 
-const Bunny = ({ x, y, scale = 3 }: BunnyProps) => {
+const Bunny = ({ x, y, scale = 3, tint, key, setSelected, selected }: BunnyProps) => {
   const bunny = useRef<PIXI.Sprite>(null);
   const [position, setPosition] = React.useState({ x, y });
-  const { bunScale, tint } = useAdminControls({ bunScale: 3, tint: "#ffffff" })
-
+  
   const onDown = (e: PIXI.FederatedPointerEvent) => {
     bunny.current!.alpha = 0.5;
     // to understand what's going on here:
     // https://pixijs.com/guides/components/interaction
     e.currentTarget.on('globalpointermove', onMove);
+    setSelected()
+    setLevaControls(bunny.current)
   };
 
   const onDragEnd = (e: PIXI.FederatedPointerEvent) => {
@@ -47,13 +50,21 @@ const Bunny = ({ x, y, scale = 3 }: BunnyProps) => {
     }
   }, [setPosition]);
 
+  const [myTint, setMyTint] = useState(tint)
+
+  useEffect(() => {
+    if(selected && myTint !== tint) { 
+      setMyTint(tint);
+    }
+  }, [tint, selected, myTint])
+
   return (
     <Sprite
       ref={bunny}
-      tint={tint}
+      tint={myTint ?? "#fff"}
       texture={texture}
       anchor={0.5}
-      scale={bunScale}
+      scale={3}
       eventMode="dynamic"
       position={position}
       pointerdown={onDown}
@@ -63,30 +74,53 @@ const Bunny = ({ x, y, scale = 3 }: BunnyProps) => {
   );
 };
 
+interface Controls {
+  num: number;
+  scale: number;
+  tint?: string;
+}
+
 interface AppControls extends Schema {
   num: number;
   scale: number;
+  tint?: string;
 }
 
-const App = () => {
-  const initialControls: AppControls = {
-    num: 5,
-    scale: 3,
-  };
-  const { num, scale } = useAdminControls(initialControls);
-  const [selected, setSelected] = React.useState<PIXI.DisplayObject | null>(null);
+
+
+const AppV1 = () => {
+
+  const [selected, setSelected] = React.useState<number | null>(null);
+
+  const controls = useMemo<Controls>(
+    () =>
+      selected === null ? { num: 3, scale: 3 } : { num: 3, scale: 3, tint: "#fff" },
+    [selected]
+  );
+
+  const { num, scale, tint } = useControls(controls, [controls]);
 
   const bunnies = Array.from({ length: num }, (_, i) => {
     const x = Math.floor(Math.random() * window.innerWidth);
     const y = Math.floor(Math.random() * window.innerHeight);
-    return <Bunny key={i} x={x} y={y} scale={scale} selected={selected} setSelected={setSelected} />;
+    const thisBunnySelected = i === selected
+    return (
+      <Bunny
+        tint={thisBunnySelected ? tint : undefined}
+        key={i}
+        x={x}
+        y={y}
+        scale={scale}
+        selected={thisBunnySelected}
+        setSelected={() => setSelected(i)}
+      />
+    );
   });
 
   // const onPointerDown = (event: PIXI.FederatedPointerEvent) => {
   //   const selectedItem = event.target;
   //   console.log(event)
   // };
-
 
   return (
     <Stage
@@ -101,4 +135,58 @@ const App = () => {
   );
 };
 
-export default App;
+interface PixiDisplayProps {
+    alpha: number,
+    buttonMode: boolean,
+    cacheAsBitmap: boolean,
+    cursor: string | null,
+    filterArea: PIXI.Rectangle | null,
+    filters: PIXI.Filter[] | null,
+    hitArea: PIXI.IHitArea | null,
+    interactive: boolean,
+    mask: PIXI.Graphics | PIXI.Sprite | null,
+    pivot: PIXI.Point | number,
+    position: PIXI.Point | number,
+    renderable: boolean,
+    rotation: number,
+    scale: PIXI.Point | number,
+    skew: PIXI.Point | number,
+    transform: PIXI.Transform | null,
+    visible: boolean,
+    x: number,
+    y: number,
+}
+
+const AppV2 = () => {
+
+  const [spriteProperties, setSpriteProperties] = useState<PIXI.Sprite | null>(null);
+
+  const controls = useControls(spriteProperties ?? {}, [spriteProperties])
+
+  return (
+    <Stage
+      width={window.innerWidth}
+      height={window.innerHeight}
+      options={{
+        background: 0x1099bb,
+        eventMode: "passive",
+      }}
+    >
+      <Sprite
+        ref={(node) => {
+          setSpriteProperties(node);
+        }}
+        tint={"#fff"}
+        texture={texture}
+        anchor={0.5}
+        scale={3}
+        x={100}
+        y={100}
+        {...controls}
+        eventMode="dynamic"
+      />
+    </Stage>
+  );
+}
+
+export default AppV2
