@@ -10,25 +10,26 @@ texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
 
 function useAdminControls<T extends Schema>(initialSchema: T): T {
   if (import.meta.env.VITE_ADMIN_MODE) {
+    // @LIAM: what should I do instead here?
     return useControls(initialSchema) as unknown as T;
   }
   return initialSchema;
 }
 
 interface BunnyProps {
-  app: PIXI.Application;
   x: number;
   y: number;
   scale: number;
+  selected: PIXI.DisplayObject | null;
+  setSelected: (selected: PIXI.DisplayObject | null) => void;
 }
 
-const Bunny = withPixiApp(({ app, x, y, scale = 3 }: BunnyProps) => {
+const Bunny = ({ x, y, scale = 3 }: BunnyProps) => {
   const bunny = useRef<PIXI.Sprite>(null);
   const [position, setPosition] = React.useState({ x, y });
+  const { bunScale, tint } = useAdminControls({ bunScale: 3, tint: "#ffffff" })
 
-  const { bunScale, tint } = useAdminControls({ bunScale: scale, tint: "#ffffff" })
-
-  const onDragStart = (e: PIXI.FederatedPointerEvent) => {
+  const onDown = (e: PIXI.FederatedPointerEvent) => {
     bunny.current!.alpha = 0.5;
     // to understand what's going on here:
     // https://pixijs.com/guides/components/interaction
@@ -55,12 +56,12 @@ const Bunny = withPixiApp(({ app, x, y, scale = 3 }: BunnyProps) => {
       scale={bunScale}
       eventMode="dynamic"
       position={position}
-      pointerdown={onDragStart}
+      pointerdown={onDown}
       pointerup={onDragEnd}
       pointerupoutside={onDragEnd}
     />
   );
-});
+};
 
 interface AppControls extends Schema {
   num: number;
@@ -73,16 +74,28 @@ const App = () => {
     scale: 3,
   };
   const { num, scale } = useAdminControls(initialControls);
+  const [selected, setSelected] = React.useState<PIXI.DisplayObject | null>(null);
 
   const bunnies = Array.from({ length: num }, (_, i) => {
     const x = Math.floor(Math.random() * window.innerWidth);
     const y = Math.floor(Math.random() * window.innerHeight);
-    return <Bunny key={i} x={x} y={y} scale={scale} />;
+    return <Bunny key={i} x={x} y={y} scale={scale} selected={selected} setSelected={setSelected} />;
   });
+
+  // const onPointerDown = (event: PIXI.FederatedPointerEvent) => {
+  //   const selectedItem = event.target;
+  //   console.log(event)
+  // };
 
 
   return (
-    <Stage width={window.innerWidth} height={window.innerHeight} options={{ background: 0x1099bb }}>
+    <Stage
+      width={window.innerWidth}
+      height={window.innerHeight}
+      options={{
+        background: 0x1099bb,
+        eventMode: "passive",
+      }}>
       {bunnies}
     </Stage>
   );
