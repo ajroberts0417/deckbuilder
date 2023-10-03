@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Stage, Sprite, withPixiApp } from '@pixi/react';
 import * as PIXI from 'pixi.js';
 import { useControls } from 'leva'
 import { Schema } from 'leva/dist/declarations/src/types'
+import { v4 } from 'uuid'
 
 const texture = PIXI.Texture.from('https://pixijs.com/assets/bunny.png');
 texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
@@ -189,4 +190,109 @@ const AppV2 = () => {
   );
 }
 
-export default AppV2
+/*
+
+provider config (leva interactive UI)
+
+- shape of data for form (initial values + type)
+
+- how to know the component is selected
+
+- register function that gives the provider an awareness that this has been selected
+
+- initial values
+
+- BONUS: how can we automatically see what’s mounted and see what their props are
+
+- useDevControls(props)
+  - when selected:
+      - whenever props changes, set() leva's value to the new props
+      - return values from leva
+  - when not selected:
+      - return props
+     
+
+*/
+
+
+
+const LevaContext = React.createContext<{ 
+  set: (value: any) => void
+  controls: any
+  setSelected: (uuid: string) => void
+  selected: string
+}>({
+  set: () => undefined,
+  controls: undefined,
+  setSelected: () => undefined,
+  selected: ''
+})
+
+function useObservableState<T>(initialState: T) {
+  const uuid = useMemo(() => v4(), [])
+  const { set, controls, selected, setSelected } = React.useContext(LevaContext)
+  const observing = selected === uuid
+  const [state, setState] = useState(initialState)
+
+  const pullFromLeva = useCallback(() => setState(controls), [controls, setState])
+  const pushToLeva = useCallback(() => set(state), [set, state])
+
+  useEffect(() => {
+    // if this component is selected, sync leva updates to this
+    if(observing) {
+      pullFromLeva()
+    }
+  }, [observing, pullFromLeva])
+
+  const observeThis = useCallback(() => {
+    setSelected(uuid)
+    pushToLeva()
+  }, [pushToLeva, setSelected, uuid])
+
+  return {
+    state,
+    observeThis,
+    setState: () => {
+      setState(state)
+      // if this component is selected, sync updates to leva
+      if(observing) {
+        pushToLeva()
+      }
+    }
+  };
+}
+
+const LevaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+
+
+  // get(['color', 'height', 'width'])
+  const [selected, setSelected] = useState('')
+  const [controls, set] = useControls(() => ({color: "white", width: "100px"}), []);
+
+  return (
+    <LevaContext.Provider value={{ controls, set, setSelected, selected }}>
+      {children}
+    </LevaContext.Provider>
+  )
+}
+
+const TestComponent = () => {
+
+  const { state, observeThis, setState } = useObservableState({ color: "red", width: "100px" });
+
+  return (
+    <div onClick={observeThis} style={{ height: '100px', width: state.width, backgroundColor: state.color }}></div>
+  )
+}
+
+const AppV3 = () => {
+  return (
+    <LevaProvider>
+      <TestComponent></TestComponent>
+      <TestComponent></TestComponent>
+    </LevaProvider>
+  )
+};
+
+
+export default AppV3
