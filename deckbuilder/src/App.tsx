@@ -1,13 +1,18 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { Stage, Sprite, withPixiApp } from '@pixi/react';
-import * as PIXI from 'pixi.js';
-import { useControls } from 'leva'
-import { Schema } from 'leva/dist/declarations/src/types'
-import { v4 } from 'uuid'
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
+import { Stage, Sprite, withPixiApp } from "@pixi/react";
+import * as PIXI from "pixi.js";
+import { useControls } from "leva";
+import { Schema } from "leva/dist/declarations/src/types";
+import { v4 } from "uuid";
 
-const texture = PIXI.Texture.from('https://pixijs.com/assets/bunny.png');
+const texture = PIXI.Texture.from("https://pixijs.com/assets/bunny.png");
 texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-
 
 function useAdminControls<T extends Schema>(initialSchema: T): T {
   if (import.meta.env.VITE_ADMIN_MODE) {
@@ -18,46 +23,57 @@ function useAdminControls<T extends Schema>(initialSchema: T): T {
 }
 
 interface BunnyProps {
-  key: number
+  key: number;
   x: number;
   y: number;
   tint?: string;
   scale: number;
-  selected: boolean
+  selected: boolean;
   setSelected: () => void;
 }
 
-const Bunny = ({ x, y, scale = 3, tint, key, setSelected, selected }: BunnyProps) => {
+const Bunny = ({
+  x,
+  y,
+  scale = 3,
+  tint,
+  key,
+  setSelected,
+  selected,
+}: BunnyProps) => {
   const bunny = useRef<PIXI.Sprite>(null);
   const [position, setPosition] = React.useState({ x, y });
-  
+
   const onDown = (e: PIXI.FederatedPointerEvent) => {
     bunny.current!.alpha = 0.5;
     // to understand what's going on here:
     // https://pixijs.com/guides/components/interaction
-    e.currentTarget.on('globalpointermove', onMove);
-    setSelected()
-    setLevaControls(bunny.current)
+    e.currentTarget.on("globalpointermove", onMove);
+    setSelected();
+    setLevaControls(bunny.current);
   };
 
   const onDragEnd = (e: PIXI.FederatedPointerEvent) => {
-    e.currentTarget.off('globalpointermove', onMove);
+    e.currentTarget.off("globalpointermove", onMove);
     bunny.current!.alpha = 1;
   };
 
-  const onMove = React.useCallback((e: PIXI.FederatedPointerEvent) => {
-    if (bunny.current) {
-      setPosition(e.data.getLocalPosition(bunny.current.parent));
-    }
-  }, [setPosition]);
+  const onMove = React.useCallback(
+    (e: PIXI.FederatedPointerEvent) => {
+      if (bunny.current) {
+        setPosition(e.data.getLocalPosition(bunny.current.parent));
+      }
+    },
+    [setPosition]
+  );
 
-  const [myTint, setMyTint] = useState(tint)
+  const [myTint, setMyTint] = useState(tint);
 
   useEffect(() => {
-    if(selected && myTint !== tint) { 
+    if (selected && myTint !== tint) {
       setMyTint(tint);
     }
-  }, [tint, selected, myTint])
+  }, [tint, selected, myTint]);
 
   return (
     <Sprite
@@ -87,15 +103,14 @@ interface AppControls extends Schema {
   tint?: string;
 }
 
-
-
 const AppV1 = () => {
-
   const [selected, setSelected] = React.useState<number | null>(null);
 
   const controls = useMemo<Controls>(
     () =>
-      selected === null ? { num: 3, scale: 3 } : { num: 3, scale: 3, tint: "#fff" },
+      selected === null
+        ? { num: 3, scale: 3 }
+        : { num: 3, scale: 3, tint: "#fff" },
     [selected]
   );
 
@@ -104,7 +119,7 @@ const AppV1 = () => {
   const bunnies = Array.from({ length: num }, (_, i) => {
     const x = Math.floor(Math.random() * window.innerWidth);
     const y = Math.floor(Math.random() * window.innerHeight);
-    const thisBunnySelected = i === selected
+    const thisBunnySelected = i === selected;
     return (
       <Bunny
         tint={thisBunnySelected ? tint : undefined}
@@ -130,39 +145,41 @@ const AppV1 = () => {
       options={{
         background: 0x1099bb,
         eventMode: "passive",
-      }}>
+      }}
+    >
       {bunnies}
     </Stage>
   );
 };
 
 interface PixiDisplayProps {
-    alpha: number,
-    buttonMode: boolean,
-    cacheAsBitmap: boolean,
-    cursor: string | null,
-    filterArea: PIXI.Rectangle | null,
-    filters: PIXI.Filter[] | null,
-    hitArea: PIXI.IHitArea | null,
-    interactive: boolean,
-    mask: PIXI.Graphics | PIXI.Sprite | null,
-    pivot: PIXI.Point | number,
-    position: PIXI.Point | number,
-    renderable: boolean,
-    rotation: number,
-    scale: PIXI.Point | number,
-    skew: PIXI.Point | number,
-    transform: PIXI.Transform | null,
-    visible: boolean,
-    x: number,
-    y: number,
+  alpha: number;
+  buttonMode: boolean;
+  cacheAsBitmap: boolean;
+  cursor: string | null;
+  filterArea: PIXI.Rectangle | null;
+  filters: PIXI.Filter[] | null;
+  hitArea: PIXI.IHitArea | null;
+  interactive: boolean;
+  mask: PIXI.Graphics | PIXI.Sprite | null;
+  pivot: PIXI.Point | number;
+  position: PIXI.Point | number;
+  renderable: boolean;
+  rotation: number;
+  scale: PIXI.Point | number;
+  skew: PIXI.Point | number;
+  transform: PIXI.Transform | null;
+  visible: boolean;
+  x: number;
+  y: number;
 }
 
 const AppV2 = () => {
+  const [spriteProperties, setSpriteProperties] = useState<PIXI.Sprite | null>(
+    null
+  );
 
-  const [spriteProperties, setSpriteProperties] = useState<PIXI.Sprite | null>(null);
-
-  const controls = useControls(spriteProperties ?? {}, [spriteProperties])
+  const controls = useControls(spriteProperties ?? {}, [spriteProperties]);
 
   return (
     <Stage
@@ -188,7 +205,7 @@ const AppV2 = () => {
       />
     </Stage>
   );
-}
+};
 
 /*
 
@@ -214,76 +231,143 @@ provider config (leva interactive UI)
 
 */
 
-
-
-const LevaContext = React.createContext<{ 
-  set: (value: any) => void
-  controls: any
-  setSelected: (uuid: string) => void
-  selected: string
+const LevaContext = React.createContext<{
+  set: (value: any) => void;
+  controls: any;
+  setSelected: (uuid: string) => void;
+  selected: string;
 }>({
   set: () => undefined,
   controls: undefined,
   setSelected: () => undefined,
-  selected: ''
-})
+  selected: "",
+});
 
-function useObservableState<T>(initialState: T) {
-  const uuid = useMemo(() => v4(), [])
-  const { set, controls, selected, setSelected } = React.useContext(LevaContext)
-  const observing = selected === uuid
-  const [state, setState] = useState(initialState)
+type ObserveThisFn = (e: React.MouseEvent<HTMLElement, MouseEvent>) => void;
 
-  const pullFromLeva = useCallback(() => setState(controls), [controls, setState])
-  const pushToLeva = useCallback(() => set(state), [set, state])
+interface UseObservableState {
+  state: any;
+  observeThis: ObserveThisFn;
+  setState: (value: any) => void;
+}
+
+interface UseObservableStateInputs<State> {
+  initialState: State;
+  options?: {
+    highlightStyles: boolean;
+  };
+}
+
+function useObservableState<State>({
+  initialState,
+  options = { highlightStyles: true },
+}: UseObservableStateInputs<State>): UseObservableState {
+  const uuid = useMemo(() => v4(), []);
+  const ref = useRef<HTMLElement | null>(null);
+  const { set, controls, selected, setSelected } =
+    React.useContext(LevaContext);
+  const observing = selected === uuid;
+  const [state, setState] = useState(initialState);
+
+  const pullFromLeva = useCallback(
+    () => setState(controls),
+    [controls, setState]
+  );
+  const pushToLeva = useCallback(() => set(state), [set, state]);
+
+  const highlightSelected = (element: HTMLElement) => {
+    if (element) {
+      const div = document.createElement("div");
+      div.id = "_LevaAdminOverlayId";
+      div.style.position = "absolute";
+      div.style.top = `${element.offsetTop}px`;
+      div.style.left = `${element.offsetLeft}px`;
+      div.style.width = `${element.offsetWidth}px`;
+      div.style.height = `${element.offsetHeight}px`;
+      div.style.boxShadow = "inset 0 0 0 2px #89CFF0";
+      div.style.backgroundColor = "transparent";
+      div.style.pointerEvents = "none";
+      document.body.appendChild(div);
+    }
+  };
 
   useEffect(() => {
     // if this component is selected, sync leva updates to this
-    if(observing) {
-      pullFromLeva()
+    if (observing) {
+      pullFromLeva();
+      highlightSelected(ref.current!);
+    } else {
+      const highlightedDiv = document.getElementById("_LevaAdminOverlayId");
+      if (highlightedDiv) {
+        document.body.removeChild(highlightedDiv);
+      }
     }
-  }, [observing, pullFromLeva])
+  }, [observing, pullFromLeva]);
 
-  const observeThis = useCallback(() => {
-    setSelected(uuid)
-    pushToLeva()
-  }, [pushToLeva, setSelected, uuid])
+  const observeThis = useCallback<ObserveThisFn>(
+    (e) => {
+      setSelected(uuid);
+      pushToLeva();
+      // apply a blue ring styles to the target of the event
+      ref.current = e.currentTarget;
+    },
+    [pushToLeva, setSelected, uuid]
+  );
 
   return {
     state,
     observeThis,
     setState: () => {
-      setState(state)
+      setState(state);
       // if this component is selected, sync updates to leva
-      if(observing) {
-        pushToLeva()
+      if (observing) {
+        pushToLeva();
       }
-    }
+    },
   };
 }
 
-const LevaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-
-
+const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   // get(['color', 'height', 'width'])
-  const [selected, setSelected] = useState('')
-  const [controls, set] = useControls(() => ({color: "white", width: "100px"}), []);
+  const [selected, setSelected] = useState("");
+  const [controls, set] = useControls(
+    () => ({ color: "white", width: "100px" }),
+    []
+  );
 
   return (
     <LevaContext.Provider value={{ controls, set, setSelected, selected }}>
       {children}
     </LevaContext.Provider>
-  )
+  );
+};
+
+interface TestState {
+  color: string;
+  width: string;
 }
 
 const TestComponent = () => {
-
-  const { state, observeThis, setState } = useObservableState({ color: "red", width: "100px" });
+  const { state, observeThis, setState } = useObservableState<TestState>({
+    initialState: {
+      color: "white",
+      width: "100px",
+    },
+  });
 
   return (
-    <div onClick={observeThis} style={{ height: '100px', width: state.width, backgroundColor: state.color }}></div>
-  )
-}
+    <div
+      onClick={observeThis}
+      style={{
+        height: "100px",
+        width: state.width,
+        backgroundColor: state.color,
+      }}
+    ></div>
+  );
+};
 
 const AppV3 = () => {
   return (
@@ -291,8 +375,7 @@ const AppV3 = () => {
       <TestComponent></TestComponent>
       <TestComponent></TestComponent>
     </LevaProvider>
-  )
+  );
 };
 
-
-export default AppV3
+export default AppV3;
