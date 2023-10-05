@@ -10,6 +10,7 @@ import * as PIXI from "pixi.js";
 import { useControls } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
 import { v4 } from "uuid";
+import SpriteSheet from './SpriteSheet';
 
 const texture = PIXI.Texture.from("https://pixijs.com/assets/bunny.png");
 texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
@@ -178,8 +179,9 @@ const AppV2 = () => {
   const [spriteProperties, setSpriteProperties] = useState<PIXI.Sprite | null>(
     null
   );
-
   const controls = useControls(spriteProperties ?? {}, [spriteProperties]);
+
+  // const controls = useControls(spriteProperties ?? {}, [spriteProperties])
 
   return (
     <Stage
@@ -190,7 +192,7 @@ const AppV2 = () => {
         eventMode: "passive",
       }}
     >
-      <Sprite
+      {/* <Sprite
         ref={(node) => {
           setSpriteProperties(node);
         }}
@@ -202,7 +204,8 @@ const AppV2 = () => {
         y={100}
         {...controls}
         eventMode="dynamic"
-      />
+      /> */}
+      <SpriteSheet />
     </Stage>
   );
 };
@@ -275,32 +278,37 @@ function useObservableState<State>({
   );
   const pushToLeva = useCallback(() => set(state), [set, state]);
 
-  const highlightSelected = (element: HTMLElement) => {
+  // conditionally create or remove the leva overlay
+  const highlightSelected = (element: HTMLElement | null) => {
     if (element) {
-      const div = document.createElement("div");
-      div.id = "_LevaAdminOverlayId";
-      div.style.position = "absolute";
+      let div = document.getElementById("_LevaAdminOverlayId");
+      if (!div) {
+        div = document.createElement("div");
+        div.id = "_LevaAdminOverlayId";
+        div.style.position = "absolute";
+        div.style.boxShadow = "inset 0 0 0 2px #89CFF0";
+        div.style.backgroundColor = "transparent";
+        div.style.pointerEvents = "none";
+        document.body.appendChild(div);
+      }
       div.style.top = `${element.offsetTop}px`;
       div.style.left = `${element.offsetLeft}px`;
       div.style.width = `${element.offsetWidth}px`;
       div.style.height = `${element.offsetHeight}px`;
-      div.style.boxShadow = "inset 0 0 0 2px #89CFF0";
-      div.style.backgroundColor = "transparent";
-      div.style.pointerEvents = "none";
-      document.body.appendChild(div);
     }
   };
 
+  // adjust the highlight overlay when the element state changes
   useEffect(() => {
-    // if this component is selected, sync leva updates to this
+    if (options.highlightStyles && observing) {
+      highlightSelected(ref.current);
+    }
+  }, [observing, state, options.highlightStyles]);
+
+  // pull from leva everytime the leva controls change
+  useEffect(() => {
     if (observing) {
       pullFromLeva();
-      highlightSelected(ref.current!);
-    } else {
-      const highlightedDiv = document.getElementById("_LevaAdminOverlayId");
-      if (highlightedDiv) {
-        document.body.removeChild(highlightedDiv);
-      }
     }
   }, [observing, pullFromLeva]);
 
@@ -333,7 +341,7 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   // get(['color', 'height', 'width'])
   const [selected, setSelected] = useState("");
   const [controls, set] = useControls(
-    () => ({ color: "white", width: "100px" }),
+    () => ({ height: "100px", color: "white", width: "100px" }),
     []
   );
 
@@ -345,6 +353,7 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 interface TestState {
+  height: string;
   color: string;
   width: string;
 }
@@ -352,6 +361,7 @@ interface TestState {
 const TestComponent = () => {
   const { state, observeThis, setState } = useObservableState<TestState>({
     initialState: {
+      height: "100px",
       color: "white",
       width: "100px",
     },
@@ -361,7 +371,7 @@ const TestComponent = () => {
     <div
       onClick={observeThis}
       style={{
-        height: "100px",
+        height: state.height,
         width: state.width,
         backgroundColor: state.color,
       }}
