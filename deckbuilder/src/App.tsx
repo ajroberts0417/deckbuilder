@@ -10,7 +10,7 @@ import * as PIXI from "pixi.js";
 import { useControls } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
 import { v4 } from "uuid";
-import SpriteSheet from './SpriteSheet';
+import SpriteSheet from "./SpriteSheet";
 
 const texture = PIXI.Texture.from("https://pixijs.com/assets/bunny.png");
 texture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
@@ -234,16 +234,24 @@ provider config (leva interactive UI)
 
 */
 
-const LevaContext = React.createContext<{
+interface LevaContextValue {
+  controls: Schema;
   set: (value: any) => void;
-  controls: any;
-  setSelected: (uuid: string) => void;
-  selected: string;
-}>({
+  selectedElement: HTMLElement | null;
+  setSelectedElement: (element: HTMLElement) => void;
+  addControls: (newControls: Schema) => void;
+  overwriteControls: (newControls: Schema) => void;
+  highlightSelected: (element: HTMLElement | null) => void;
+}
+
+const LevaContext = React.createContext<LevaContextValue>({
   set: () => undefined,
-  controls: undefined,
-  setSelected: () => undefined,
-  selected: "",
+  controls: {},
+  setSelectedElement: () => undefined,
+  selectedElement: null,
+  addControls: () => undefined,
+  overwriteControls: () => undefined,
+  highlightSelected: () => undefined,
 });
 
 type ObserveThisFn = (e: React.MouseEvent<HTMLElement, MouseEvent>) => void;
@@ -254,56 +262,36 @@ interface UseObservableState {
   setState: (value: any) => void;
 }
 
-interface UseObservableStateInputs<State> {
-  initialState: State;
+interface UseObservableStateInputs {
+  initialState: Schema;
   options?: {
     highlightStyles: boolean;
   };
 }
 
-function useObservableState<State>({
+function useObservableState({
   initialState,
   options = { highlightStyles: true },
-}: UseObservableStateInputs<State>): UseObservableState {
-  const uuid = useMemo(() => v4(), []);
-  const ref = useRef<HTMLElement | null>(null);
-  const { set, controls, selected, setSelected } =
+}: UseObservableStateInputs): UseObservableState {
+  const { set, controls, selectedElement, setSelectedElement } =
     React.useContext(LevaContext);
-  const observing = selected === uuid;
-  const [state, setState] = useState(initialState);
+
+  const [state, setState] = useState<Schema>(initialState);
 
   const pullFromLeva = useCallback(
     () => setState(controls),
     [controls, setState]
   );
+
   const pushToLeva = useCallback(() => set(state), [set, state]);
 
-  // conditionally create or remove the leva overlay
-  const highlightSelected = (element: HTMLElement | null) => {
-    if (element) {
-      let div = document.getElementById("_LevaAdminOverlayId");
-      if (!div) {
-        div = document.createElement("div");
-        div.id = "_LevaAdminOverlayId";
-        div.style.position = "absolute";
-        div.style.boxShadow = "inset 0 0 0 2px #89CFF0";
-        div.style.backgroundColor = "transparent";
-        div.style.pointerEvents = "none";
-        document.body.appendChild(div);
-      }
-      div.style.top = `${element.offsetTop}px`;
-      div.style.left = `${element.offsetLeft}px`;
-      div.style.width = `${element.offsetWidth}px`;
-      div.style.height = `${element.offsetHeight}px`;
-    }
-  };
+  const [lastObservedElement, setLastObservedElement] =
+    useState<HTMLElement | null>(null);
 
-  // adjust the highlight overlay when the element state changes
-  useEffect(() => {
-    if (options.highlightStyles && observing) {
-      highlightSelected(ref.current);
-    }
-  }, [observing, state, options.highlightStyles]);
+  const observing = useMemo(
+    () => lastObservedElement === selectedElement,
+    [lastObservedElement, selectedElement]
+  );
 
   // pull from leva everytime the leva controls change
   useEffect(() => {
@@ -314,12 +302,12 @@ function useObservableState<State>({
 
   const observeThis = useCallback<ObserveThisFn>(
     (e) => {
-      setSelected(uuid);
+      // addControls(state);
+      setSelectedElement(e.currentTarget);
+      setLastObservedElement(e.currentTarget);
       pushToLeva();
-      // apply a blue ring styles to the target of the event
-      ref.current = e.currentTarget;
     },
-    [pushToLeva, setSelected, uuid]
+    [pushToLeva, setSelectedElement]
   );
 
   return {
@@ -327,7 +315,7 @@ function useObservableState<State>({
     observeThis,
     setState: () => {
       setState(state);
-      // if this component is selected, sync updates to leva
+      // if this div is selected, sync updates to leva
       if (observing) {
         pushToLeva();
       }
@@ -335,18 +323,94 @@ function useObservableState<State>({
   };
 }
 
+function useOverlayPosition() {
+  const [overlayPosition, setOverlayPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+  });
+
+  const updatePositionFromElement = (element: HTMLElement) => {
+    setOverlayPosition({
+      top: element.offsetTop,
+      left: element.offsetLeft,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+    });
+  };
+
+  return {
+    overlayPosition,
+    updatePositionFromElement,
+  };
+}
+
 const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  // get(['color', 'height', 'width'])
-  const [selected, setSelected] = useState("");
-  const [controls, set] = useControls(
-    () => ({ height: "100px", color: "white", width: "100px" }),
-    []
+  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(
+    null
+  );
+  const [controlSchema, setControlSchema] = useState<Schema>({ foo: "bar" });
+  const [controls, set] = useControls(() => controlSchema, [controlSchema]);
+
+  const addControls = (newControls: Schema) => {
+    setControlSchema({ ...controls, ...newControls });
+  };
+
+  const overwriteControls = (newControls: Schema) => {
+    setControlSchema(newControls);
+  };
+
+  const { overlayPosition, updatePositionFromElement } = useOverlayPosition();
+
+  const listenForElementResize = useCallback(
+    (entries: ResizeObserverEntry[]) => {
+      for (const entry of entries) {
+        const element = entry.target as HTMLElement;
+        if (element) {
+          updatePositionFromElement(element);
+        }
+      }
+    },
+    [updatePositionFromElement]
   );
 
+  // // when the selected element changes, register a resize observer for the highlight overlay
+  useEffect(() => {
+    if (selectedElement) {
+      updatePositionFromElement(selectedElement);
+      const observer = new ResizeObserver(listenForElementResize);
+      observer.observe(selectedElement);
+      return () => observer.disconnect();
+    }
+  }, [selectedElement, listenForElementResize, updatePositionFromElement]);
+
   return (
-    <LevaContext.Provider value={{ controls, set, setSelected, selected }}>
+    <LevaContext.Provider
+      value={{
+        controls,
+        set,
+        setSelected,
+        selected,
+        addControls,
+        overwriteControls,
+      }}
+    >
+      <div
+        id="_LevaAdminOverlayId"
+        style={{
+          position: "absolute",
+          boxShadow: "inset 0 0 0 2px #89CFF0",
+          backgroundColor: "transparent",
+          pointerEvents: "none",
+          top: overlayPosition.top,
+          left: overlayPosition.left,
+          width: overlayPosition.width,
+          height: overlayPosition.height,
+        }}
+      />
       {children}
     </LevaContext.Provider>
   );
@@ -359,11 +423,33 @@ interface TestState {
 }
 
 const TestComponent = () => {
-  const { state, observeThis, setState } = useObservableState<TestState>({
+  const { state, observeThis, setState } = useObservableState({
     initialState: {
       height: "100px",
       color: "white",
       width: "100px",
+    },
+  });
+
+  return (
+    <div
+      onClick={observeThis}
+      style={{
+        height: state.height,
+        width: state.width,
+        backgroundColor: state.color,
+      }}
+    ></div>
+  );
+};
+
+const TestComponent2 = () => {
+  const { state, observeThis, setState } = useObservableState({
+    initialState: {
+      height: "100px",
+      color: "white",
+      width: "100px",
+      position: { options: ["absolute", "relative", "fixed"] },
     },
   });
 
@@ -384,6 +470,7 @@ const AppV3 = () => {
     <LevaProvider>
       <TestComponent></TestComponent>
       <TestComponent></TestComponent>
+      <TestComponent2 />
     </LevaProvider>
   );
 };
