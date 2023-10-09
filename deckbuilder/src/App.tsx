@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { Stage, Sprite, withPixiApp } from "@pixi/react";
 import * as PIXI from "pixi.js";
-import { useControls } from "leva";
+import { levaStore, useControls, useCreateStore, Leva, LevaPanel } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
 import { v4 } from "uuid";
 import SpriteSheet from "./SpriteSheet";
@@ -287,7 +287,14 @@ function useObservableState({
     [controls, setState]
   );
 
-  const pushToLeva = useCallback(() => set(state), [set, state]);
+  const pushToLeva = useCallback(
+    (state: Schema) => {
+      set(state);
+    },
+    [set]
+  );
+
+  // const pushToLeva = useCallback(() => set(state), [set, state]);
 
   const [lastObservedElement, setLastObservedElement] =
     useState<HTMLElement | null>(null);
@@ -304,29 +311,31 @@ function useObservableState({
   useEffect(() => {
     if (observing) {
       console.log("pulling from leva");
-      console.log(controls, state, selectedElement, setSelectedElement);
+      // console.log(controls, state, selectedElement, setSelectedElement);
       pullFromLeva();
     }
   }, [observing, pullFromLeva]);
 
   const observeThis = useCallback<ObserveThisFn>(
     (e) => {
-      overwriteControls({ foo: controls.foo, ...state });
+      console.log("overwriting controls");
+      overwriteControls({ ...state });
+      console.log("pushing to leva");
+      // pushToLeva(state);
       setSelectedElement(e.currentTarget);
       setLastObservedElement(e.currentTarget);
-      pushToLeva();
     },
-    [pushToLeva, addControls, state, setSelectedElement]
+    [state, setSelectedElement, overwriteControls]
   );
 
   return {
     state,
     observeThis,
     setState: () => {
-      setState(state);
+      setState(state); // this line is suspect
       // if this div is selected, sync updates to leva
       if (observing) {
-        pushToLeva();
+        pushToLeva(state);
       }
     },
   };
@@ -400,15 +409,18 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(
     null
   );
-  const [controlSchema, setControlSchema] = useState<Schema>({ foo: "bar" });
-  const [controls, set] = useControls(() => controlSchema, [controlSchema]);
+  const store = useCreateStore();
+  const [controls, set] = useControls(() => ({ foo: "bar" }), { store });
 
   const addControls = (newControls: Schema) => {
-    setControlSchema({ ...controls, ...newControls });
+    const [data, mappedPaths] = store.getDataFromSchema(newControls);
+    store.addData(data, false);
   };
 
   const overwriteControls = (newControls: Schema) => {
-    setControlSchema(newControls);
+    console.log(controls);
+    const [data, mappedPaths] = store.getDataFromSchema(newControls);
+    store.addData(data, true);
   };
 
   return (
@@ -422,6 +434,7 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
         overwriteControls,
       }}
     >
+      <LevaPanel store={store} />
       <FocusIndicator selectedElement={selectedElement} />
       {children}
     </LevaContext.Provider>
@@ -495,4 +508,37 @@ const AppV3 = () => {
   );
 };
 
-export default AppV3;
+const AppV4 = () => {
+  const store = useCreateStore();
+  const controls = useControls({ height: "100px" }, { store });
+
+  useEffect(() => {
+    setTimeout(() => {
+      const [data, mappedPaths] = store.getDataFromSchema({
+        height: "200px",
+        width: "200px",
+      });
+      store.setOrderedPaths(["height", "width"]);
+      store.addData(data, true);
+      store.setValueAtPath("height", "300px", false);
+      store.setValueAtPath("width", "300px", false);
+    }, 1000);
+  }, [store]);
+
+  console.log(store.getData());
+
+  return (
+    <>
+      <div
+        style={{
+          height: controls.height,
+          width: controls.width || "100px",
+          backgroundColor: "#fff",
+        }}
+      />
+      <LevaPanel store={store} />
+    </>
+  );
+};
+
+export default AppV4;
