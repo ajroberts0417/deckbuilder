@@ -250,13 +250,22 @@ export default AppV3;
 
 interface UseObservableElement {
   ref: React.MutableRefObject<HTMLElement | null>;
+  state: Schema
 }
 
-function useObservableElement() {
+function useObservableElement(state: Schema) {
   const id = useMemo(() => v4(), []);
   const [element, setElement] = useState<HTMLElement | null>(null)
   const ref = (element: HTMLElement | null) => {
     setElement(element)
   }
+  const { } = useObservableState({})
+
+  useEffect(() => {
+    element?.onclick = () => {
+      element?.onclick()
+
+    }
+  }, [element])
   return { ref }
 }
