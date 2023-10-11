@@ -8,7 +8,6 @@ import React, {
 import { useControls, useCreateStore, Leva, LevaPanel } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
 import FocusIndicator from "./FocusIndicator";
-import { v4 } from "uuid";
 
 
 interface LevaContextValue {
@@ -16,6 +15,8 @@ interface LevaContextValue {
   set: (value: Schema) => void;
   selectedElement: HTMLElement | null;
   setSelectedElement: (element: HTMLElement) => void;
+  addControls: (newControls: Schema) => void;
+  overwriteControls: (newControls: Schema) => void;
   observeNewElement: (newControls: Schema, newElement: HTMLElement) => void;
 }
 
@@ -24,6 +25,8 @@ const LevaContext = React.createContext<LevaContextValue>({
   controls: {},
   setSelectedElement: () => undefined,
   selectedElement: null,
+  addControls: () => undefined,
+  overwriteControls: () => undefined,
   observeNewElement: () => undefined,
 });
 
@@ -42,6 +45,57 @@ interface UseObservableStateInputs<S extends Schema> {
   };
 }
 
+function useConnectionToLeva<S extends Schema>({ state }) {
+
+  // we use a ref because we just need a simple flag that works imperatively
+  // we don't need anything to react to this flag.
+  const safeToPull = useRef(false)
+
+  const [lastObservedElement, setLastObservedElement] = useState<HTMLElement | null>(null);
+
+  const {
+    selectedElement,
+    observeNewElement,
+  } = React.useContext(LevaContext);
+
+  const observing = useMemo(
+    () =>
+      lastObservedElement &&
+      selectedElement &&
+      lastObservedElement === selectedElement,
+    [lastObservedElement, selectedElement]
+  );
+
+  const observeThis = useCallback<ObserveThisFn>(
+    (e) => {
+      console.log("observe new element");
+      safeToPull.current = false;
+      // overwriteControls({ ...state });
+      observeNewElement(state, e.currentTarget);
+      // pushToLeva(state);
+      console.log("set last observed element")
+      setLastObservedElement(e.currentTarget);
+    },
+    [state, observeNewElement, pushToLeva]
+  );
+
+  return {
+    connected,
+
+  }
+
+  /*
+  steps:
+  onObserveThis:
+  0. setSafeToPull(false)
+  1. push my local state to the leva state
+  2. setObserving(true)
+  if(observing)
+    2. check whether local state matches leva state
+    3. after local state === leva state *once*, setSafeToPull(true)
+  if(observing && safeToPull) pullFromLeva()
+  */
+}
 
 function useObservableState<S extends Schema>({
   initialState,
@@ -49,11 +103,18 @@ function useObservableState<S extends Schema>({
   const {
     set,
     controls,
+    selectedElement,
     observeNewElement,
   } = React.useContext(LevaContext);
 
   const [state, setState] = useState(initialState);
   const [safeToPull, setSafeToPull] = useState(false)
+
+
+  // useSyncWithLeva(state)
+
+  // we can't pull before we force push this component's state to leva
+  // so we use this flag to track when it's safe to pull (e.g. leva is up to date)
 
   const pullFromLeva = useCallback(
     // this type error actually represents the problem
@@ -64,7 +125,17 @@ function useObservableState<S extends Schema>({
 
   const pushToLeva = useCallback((state: S) => { set(state) }, [set]);
 
-  const observing = controls.selectedElementId === myId
+  // const pushToLeva = useCallback(() => set(state), [set, state]);
+
+  const [lastObservedElement, setLastObservedElement] = useState<HTMLElement | null>(null);
+
+  const observing = useMemo(
+    () =>
+      lastObservedElement &&
+      selectedElement &&
+      lastObservedElement === selectedElement,
+    [lastObservedElement, selectedElement]
+  );
 
   useEffect(() => {
     if (observing && !safeToPull) {
@@ -74,20 +145,23 @@ function useObservableState<S extends Schema>({
 
   // pull from leva everytime the leva controls change
   useEffect(() => {
-    console.log(state)
-    console.log(controls)
-    console.log(safeToPull)
     if (observing && safeToPull) {
+      console.log("pulling from leva");
+      // console.log(controls, state, selectedElement, setSelectedElement);
       pullFromLeva();
     }
-  }, [observing, pullFromLeva, safeToPull]);
+  }, [observing, pullFromLeva, controls, safeToPull]);
 
   const observeThis = useCallback<ObserveThisFn>(
     (e) => {
       setSafeToPull(false);
+      console.log("observe new element");
+      // overwriteControls({ ...state });
       observeNewElement(state, e.currentTarget);
+      console.log("set last observed element")
+      setLastObservedElement(e.currentTarget);
     },
-    [state, observeNewElement]
+    [state, observeNewElement, pushToLeva]
   );
 
   return {
@@ -103,19 +177,41 @@ function useObservableState<S extends Schema>({
   };
 }
 
-// controls.selectedElementId === myId ? controls : state
-
 const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
+  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(
+    null
+  );
+  const store = useCreateStore();
   const [schema, setSchema] = useState<Schema>({});
   const [controls, set] = useControls(() => (schema), [schema]);
 
+  const addControls = (newControls: Schema) => {
+    const [data, mappedPaths] = store.getDataFromSchema(newControls);
+    store.addData(data, false);
+    store.set(newControls, false);
+  };
+
+  const overwriteControls = (newControls: Schema) => {
+    console.log(controls);
+    const [data, mappedPaths] = store.getDataFromSchema(newControls);
+    store.addData(data, true);
+    store.set(newControls, false)
+  };
 
   const observeNewElement = (newControls: Schema, newElement: HTMLElement) => {
+    console.log("BEGIN NEW ELEMENT\nnew controls:", newControls);
+    console.log("old controls", controls);
+    console.log("store:", store.getData())
     setSchema(newControls);
+    // const [data, mappedPaths] = store.getDataFromSchema(newControls);
+    // store.addData(data, true);
+    // set(newControls);
     setSelectedElement(newElement);
+    console.log("END NEW ELEMENT\nnew controls:", newControls);
+    console.log("old controls", controls);
+    console.log("store:", store.getData());
   }
 
   return (
@@ -123,6 +219,10 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         controls,
         set,
+        setSelectedElement,
+        selectedElement,
+        addControls,
+        overwriteControls,
         observeNewElement,
       }}
     >
@@ -224,14 +324,6 @@ const AppV4 = () => {
   console.log(zustandStore);
   console.log(controls)
 
-
-  /* 
-  ref solves two needs
-    - allows us to programatically add a new data-* attribute to the element on mount 
-      - this, in turn, allows us to identify the selected element in controls
-    - allows us to position the "selected" indicator 
-  */
-
   return (
     <>
       <div
@@ -247,16 +339,3 @@ const AppV4 = () => {
 };
 
 export default AppV3;
-
-interface UseObservableElement {
-  ref: React.MutableRefObject<HTMLElement | null>;
-}
-
-function useObservableElement() {
-  const id = useMemo(() => v4(), []);
-  const [element, setElement] = useState<HTMLElement | null>(null)
-  const ref = (element: HTMLElement | null) => {
-    setElement(element)
-  }
-  return { ref }
-}
