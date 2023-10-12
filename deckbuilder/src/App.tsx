@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useControls, useCreateStore, Leva, LevaPanel } from "leva";
-import { Schema } from "leva/dist/declarations/src/types";
+import { Schema, StoreType } from "leva/dist/declarations/src/types";
 import FocusIndicator from "./FocusIndicator";
 import { v4 } from "uuid";
 
@@ -17,6 +17,7 @@ interface LevaContextValue {
   selectedElement: HTMLElement | null;
   setSelectedElement: (element: HTMLElement) => void;
   observeNewElement: (newControls: Schema, newElement: HTMLElement) => void;
+  store: StoreType | null;
 }
 
 const LevaContext = React.createContext<LevaContextValue>({
@@ -25,82 +26,68 @@ const LevaContext = React.createContext<LevaContextValue>({
   setSelectedElement: () => undefined,
   selectedElement: null,
   observeNewElement: () => undefined,
+  store: null
 });
 
-type ObserveThisFn = (e: React.MouseEvent<HTMLElement, MouseEvent>) => void;
-
 interface UseObservableState<S extends Schema> {
+  ref: (element: HTMLElement | null) => void
   state: S;
-  observeThis: ObserveThisFn;
   setState: (value: S) => void;
 }
 
-interface UseObservableStateInputs<S extends Schema> {
-  initialState: S;
-  options?: {
-    highlightStyles: boolean;
-  };
-}
 
+function useObservableState<S extends Schema>(initialState: S): UseObservableState<S> {
 
-function useObservableState<S extends Schema>({
-  initialState,
-}: UseObservableStateInputs<S>): UseObservableState<S> {
-  const {
-    set,
-    controls,
-    observeNewElement,
-  } = React.useContext(LevaContext);
+  const [state, setState] = useState<S>(initialState);
+  const { set, controls, observeNewElement, store } = React.useContext(LevaContext);
+  const { current: id } = useRef(v4())
+  const [element, setElement] = useState<HTMLElement | null>(null)
+  const ref = (element: HTMLElement | null) => {
+    setElement(element)
+  }
 
-  const [state, setState] = useState(initialState);
-  const [safeToPull, setSafeToPull] = useState(false)
-
-  const pullFromLeva = useCallback(
-    // this type error actually represents the problem
-    // i should only pull from Leva if I know controls is the same Schema as state
-    () => setState(controls),
-    [controls, setState]
-  );
+  const storeId = store ? store?.get('id') : null
+  console.log(storeId)
 
   const pushToLeva = useCallback((state: S) => { set(state) }, [set]);
+  const safeToPull = useMemo(() => storeId && id && storeId === id, [controls.id])
 
-  const observing = controls.selectedElementId === myId
+  // pull whenever controls change
+  useEffect(() => {
+    // console.log(controls)
+    if (safeToPull) {
+      // console.log(safeToPull)
+      // console.log(controls)
+      setState(controls as S)
+    }
+  }, [controls, safeToPull]);
+
+
 
   useEffect(() => {
-    if (observing && !safeToPull) {
-      setSafeToPull(controls === state)
+    const clickHandler = () => element ? observeNewElement({ id, ...state }, element) : undefined
+    if (element) {
+      element.addEventListener('click', clickHandler);
     }
-  }, [observing, state, controls, safeToPull])
+    return () => {
+      if (element && clickHandler) {
+        element.removeEventListener('click', clickHandler);
+      }
+    };
+  }, [state, element, id])
 
-  // pull from leva everytime the leva controls change
-  useEffect(() => {
-    console.log(state)
-    console.log(controls)
-    console.log(safeToPull)
-    if (observing && safeToPull) {
-      pullFromLeva();
-    }
-  }, [observing, pullFromLeva, safeToPull]);
-
-  const observeThis = useCallback<ObserveThisFn>(
-    (e) => {
-      setSafeToPull(false);
-      observeNewElement(state, e.currentTarget);
-    },
-    [state, observeNewElement]
-  );
 
   return {
+    ref,
     state,
-    observeThis,
     setState: () => {
       setState(state); // this line is suspect
       // if this div is selected, sync updates to leva
-      if (observing) {
+      if (safeToPull) {
         pushToLeva(state);
       }
     },
-  };
+  }
 }
 
 // controls.selectedElementId === myId ? controls : state
@@ -108,12 +95,24 @@ function useObservableState<S extends Schema>({
 const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const store = useCreateStore()
   const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
   const [schema, setSchema] = useState<Schema>({});
-  const [controls, set] = useControls(() => (schema), [schema]);
+  const [controls, set] = useControls(() => (schema), { store }, [schema]);
 
+
+
+  console.log({ controls })
+  console.log(store.getData())
+  console.log({ schema })
+
+  useEffect(() => {
+    // console.log({ schema })
+    set(schema)
+  }, [schema, set])
 
   const observeNewElement = (newControls: Schema, newElement: HTMLElement) => {
+    // console.log(newControls);
     setSchema(newControls);
     setSelectedElement(newElement);
   }
@@ -124,9 +123,10 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
         controls,
         set,
         observeNewElement,
+        store
       }}
     >
-      {/* <LevaPanel store={store} /> */}
+      <LevaPanel store={store} />
       <FocusIndicator selectedElement={selectedElement} />
       {children}
     </LevaContext.Provider>
@@ -144,18 +144,16 @@ interface TestState {
 // currently selected uuid (push + pull to/from the state of this uuid)
 
 const TestComponent = () => {
-  const { state, observeThis, setState } = useObservableState({
-    initialState: {
-      height: "100px",
-      color: "white",
-      width: "100px",
-    },
+  const { state, ref, setState } = useObservableState({
+    height: "100px",
+    color: "white",
+    width: "100px",
   });
 
   return (
     // <observable.div/>
     <div
-      onClick={observeThis}
+      ref={ref}
       style={{
         height: state.height,
         width: state.width,
@@ -166,19 +164,17 @@ const TestComponent = () => {
 };
 
 const TestComponent2 = () => {
-  const { state, observeThis, setState } = useObservableState({
-    initialState: {
-      height: "100px",
-      color: "white",
-      width: "100px",
-      // position: { options: ["absolute", "relative", "fixed"] },
-      borderRadius: "10px",
-    },
+  const { state, ref, setState } = useObservableState({
+    height: "100px",
+    color: "white",
+    width: "100px",
+    // position: { options: ["absolute", "relative", "fixed"] },
+    borderRadius: "10px",
   });
 
   return (
     <div
-      onClick={observeThis}
+      ref={ref}
       style={{
         height: state.height,
         width: state.width,
@@ -200,6 +196,11 @@ const AppV3 = () => {
   );
 };
 
+export default AppV3;
+
+
+
+
 const AppV4 = () => {
   const store = useCreateStore();
   const zustandStore = store.useStore();
@@ -210,20 +211,12 @@ const AppV4 = () => {
     setTimeout(() => {
       const newSchema = { height: "250px", width: "200px", backgroundColor: "white" };
       setSchema(newSchema);
-      // store.set(newSchema, false);
-      // const [data, mappedPaths] = store.getDataFromSchema(newSchema);
-      // // store.setOrderedPaths(["height", "width", "backgroundColor"]);
-      // store.addData(data, true);
-      // store.set({ height: "250px", width: "200px", backgroundColor: "white" }, false)
-      // store.setValueAtPath("backgroundColor", "black", false);
-      // store.setValueAtPath("width", "300px", false);
     }, 1000);
   }, [store]);
 
   console.log(store.getData());
   console.log(zustandStore);
   console.log(controls)
-
 
   /* 
   ref solves two needs
@@ -245,27 +238,3 @@ const AppV4 = () => {
     </>
   );
 };
-
-export default AppV3;
-
-interface UseObservableElement {
-  ref: React.MutableRefObject<HTMLElement | null>;
-  state: Schema
-}
-
-function useObservableElement(state: Schema) {
-  const id = useMemo(() => v4(), []);
-  const [element, setElement] = useState<HTMLElement | null>(null)
-  const ref = (element: HTMLElement | null) => {
-    setElement(element)
-  }
-  const { } = useObservableState({})
-
-  useEffect(() => {
-    element?.onclick = () => {
-      element?.onclick()
-
-    }
-  }, [element])
-  return { ref }
-}
