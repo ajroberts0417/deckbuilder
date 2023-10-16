@@ -130,7 +130,7 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 const TestComponent = () => {
-  const { state, ref, setState } = useObservableState({
+  const { state, ref } = useObservableState({
     height: "100px",
     color: "white",
     width: "100px",
@@ -156,7 +156,7 @@ const TestComponent = () => {
 };
 
 const TestComponent2 = () => {
-  const { state, ref, setState } = useObservableState({
+  const { state, ref } = useObservableState({
     height: "100px",
     color: "white",
     width: "100px",
