@@ -162,6 +162,8 @@ const TestComponent2 = () => {
     width: "100px",
     // position: { options: ["absolute", "relative", "fixed"] },
     borderRadius: "10px",
+    borderWidth: "2px",
+    borderColor: "black",
   });
 
   return (
@@ -173,6 +175,9 @@ const TestComponent2 = () => {
         backgroundColor: state.color,
         // position: state.position,
         borderRadius: state.borderRadius,
+        borderWidth: state.borderWidth,
+        borderColor: state.borderColor,
+        borderStyle: 'solid',
       }}
     ></div>
   );
