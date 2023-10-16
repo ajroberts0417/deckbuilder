@@ -93,11 +93,13 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 ```
 
-Most of the work happens in useObservableState. Mainly it is responsible for X things:
+Most of the work happens in useObservableState. Mainly it is responsible for 3 things:
 1. setup an id and an onClick handler so LevaProvider can observe the selectedElement
 2. keep track of local component state (this works just like useState)
-3. push local component state to leva when component is selected
-4. manage 2-way sync from/to the leva panel as long as the component is selected
+3. manage 2-way sync from/to the leva panel as long as the component is selected
+  a. push local component state to leva when component is selected
+  b. only after local state is pushed, continuously pull when the leva controls are updated
+  c. if local state ever changes any other way, push again
 ```ts
 function useObservableState<S extends Schema>(initialState: S): UseObservableState<S> {
   const { set, controls, observeNewElement, selectedElement } = React.useContext(LevaContext);
