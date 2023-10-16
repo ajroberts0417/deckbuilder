@@ -5,8 +5,8 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { useCreateStore, Leva, useControls, LevaPanel } from "leva";
-import { Schema, StoreType } from "leva/dist/declarations/src/types";
+import { useControls, LevaPanel } from "leva";
+import { Schema } from "leva/dist/declarations/src/types";
 import FocusIndicator from "./FocusIndicator";
 import { v4 } from "uuid";
 
@@ -17,7 +17,6 @@ interface LevaContextValue {
   selectedElement: HTMLElement | null;
   setSelectedElement: (element: HTMLElement) => void;
   observeNewElement: (newControls: Schema, newElement: HTMLElement) => void;
-  store: StoreType | null;
 }
 
 const LevaContext = React.createContext<LevaContextValue>({
@@ -26,7 +25,6 @@ const LevaContext = React.createContext<LevaContextValue>({
   setSelectedElement: () => undefined,
   selectedElement: null,
   observeNewElement: () => undefined,
-  store: null
 });
 
 interface UseObservableState<S extends Schema> {
@@ -35,36 +33,24 @@ interface UseObservableState<S extends Schema> {
   setState: (value: S) => void;
 }
 
-
 function useObservableState<S extends Schema>(initialState: S): UseObservableState<S> {
-
+  const { set, controls, observeNewElement, selectedElement } = React.useContext(LevaContext);
   const [state, setState] = useState<S>(initialState);
-  const { set, controls, observeNewElement, store, selectedElement } = React.useContext(LevaContext);
-  const { current: id } = useRef(v4())
+  const { current: id } = useRef(v4()) // a permanent id to refer to this element
   const [element, setElement] = useState<HTMLElement | null>(null)
-  const ref = (element: HTMLElement | null) => {
-    setElement(element)
-  }
-
-  const storeId = store ? store?.get('id') : null
-  console.log(storeId)
+  const ref = (element: HTMLElement | null) => { setElement(element) }
 
   const pushToLeva = useCallback((state: S) => { set(state) }, [set]);
   /*
-    first the selected element changes. 
-    then the store gets updated through a push
-    then the controls change
-
-    we need to make sure all three things have happened before  pulling
+    1. first the selected element changes. 
+    2. then the controls change
+    we need to make sure both have happened before pulling
   */
-  const safeToPull = useMemo(() => id && controls.id === id && element === selectedElement, [element, selectedElement, controls.id, id])
+  const safeToPull = useMemo(() => element === selectedElement && controls.id === id, [element, selectedElement, controls.id, id])
 
   // pull whenever controls change
   useEffect(() => {
-    // console.log(controls)
     if (safeToPull) {
-      console.log('d:', { controls, state })
-      // console.log(controls)
       setState(controls as S)
     }
   }, [controls, safeToPull]);
@@ -99,29 +85,29 @@ function useObservableState<S extends Schema>(initialState: S): UseObservableSta
 
 // controls.selectedElementId === myId ? controls : state
 
+interface ProviderState {
+  selectedElement: HTMLElement | null,
+  schema: Schema
+}
+
 const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const store = useCreateStore()
-  const [{ schema, selectedElement }, setProviderState] = useState<{
-    selectedElement: HTMLElement | null,
-    schema: Schema
-  }>({
+  const [{ schema, selectedElement }, setProviderState] = useState<ProviderState>({
     selectedElement: null,
     schema: {}
   })
-  const [controls, set] = useControls(() => (schema), { store }, [schema]);
+  const [controls, set] = useControls(() => (schema), [schema]);
 
-
-  console.log({ controls })
-  console.log(store.getData())
-  console.log({ schema })
-
+  // this feels like a hack, however:
+  // when schema changes, and useControls is re-rendered, it does not overwrite values
+  // since we want to overwrite values, we manually call set(schema) on the next render
+  // ideally, there would be an easy way to do this provided by Leva that doesn't take 2 renders.
   useEffect(() => {
-    // console.log({ schema })
     set(schema)
   }, [schema, set])
 
+  // we call this automatically on your ref when it is clicked.
   const observeNewElement = (newControls: Schema, newElement: HTMLElement) => {
     setProviderState({
       schema: newControls,
@@ -135,32 +121,23 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
         controls,
         set,
         observeNewElement,
-        store,
         selectedElement
       }}
     >
-      <LevaPanel store={store} />
+      <LevaPanel />
       <FocusIndicator selectedElement={selectedElement} />
       {children}
     </LevaContext.Provider>
   );
 };
 
-interface TestState {
-  height: string;
-  color: string;
-  width: string;
-}
-
-// map of uuid to element pointer
-// map of uuid to element state (javascript object updated through Leva)
-// currently selected uuid (push + pull to/from the state of this uuid)
-
 const TestComponent = () => {
   const { state, ref, setState } = useObservableState({
     height: "100px",
     color: "white",
     width: "100px",
+    borderWidth: "2px",
+    borderColor: "black",
   });
 
 
@@ -172,7 +149,9 @@ const TestComponent = () => {
         height: state.height,
         width: state.width,
         backgroundColor: state.color,
-        borderRadius: state.borderRadius ?? ''
+        borderWidth: state.borderWidth,
+        borderColor: state.borderColor,
+        borderStyle: 'solid',
       }}
     ></div>
   );
@@ -204,48 +183,10 @@ const TestComponent2 = () => {
 const AppV3 = () => {
   return (
     <LevaProvider>
-      <TestComponent></TestComponent>
-      <TestComponent></TestComponent>
+      <TestComponent />
+      <TestComponent />
       <TestComponent2 />
     </LevaProvider>
-  );
-};
-
-const AppV4 = () => {
-  const store = useCreateStore();
-  const zustandStore = store.useStore();
-  const [schema, setSchema] = useState<Schema>({})
-  const [controls, set] = useControls(() => (schema), { store }, [schema]);
-
-  useEffect(() => {
-    setTimeout(() => {
-      const newSchema = { height: "250px", width: "200px", backgroundColor: "white" };
-      setSchema(newSchema);
-    }, 1000);
-  }, [store]);
-
-  console.log(store.getData());
-  console.log(zustandStore);
-  console.log(controls)
-
-  /* 
-  ref solves two needs
-    - allows us to programatically add a new data-* attribute to the element on mount 
-      - this, in turn, allows us to identify the selected element in controls
-    - allows us to position the "selected" indicator 
-  */
-
-  return (
-    <>
-      <div
-        style={{
-          height: controls?.height || "100px",
-          width: controls?.width || "100px",
-          backgroundColor: controls?.backgroundColor || "#fff",
-        }}
-      />
-      <LevaPanel store={store} />
-    </>
   );
 };
 
