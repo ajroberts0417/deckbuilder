@@ -15,14 +15,12 @@ interface LevaContextValue {
   controls: Schema;
   set: (value: Schema) => void;
   selectedElement: HTMLElement | null;
-  setSelectedElement: (element: HTMLElement) => void;
   observeNewElement: (newControls: Schema, newElement: HTMLElement) => void;
 }
 
 const LevaContext = React.createContext<LevaContextValue>({
   set: () => undefined,
   controls: {},
-  setSelectedElement: () => undefined,
   selectedElement: null,
   observeNewElement: () => undefined,
 });
