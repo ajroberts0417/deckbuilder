@@ -5,7 +5,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { useControls, useCreateStore, Leva, LevaPanel } from "leva";
+import { useCreateStore, Leva, useControls, LevaPanel } from "leva";
 import { Schema, StoreType } from "leva/dist/declarations/src/types";
 import FocusIndicator from "./FocusIndicator";
 import { v4 } from "uuid";
@@ -39,7 +39,7 @@ interface UseObservableState<S extends Schema> {
 function useObservableState<S extends Schema>(initialState: S): UseObservableState<S> {
 
   const [state, setState] = useState<S>(initialState);
-  const { set, controls, observeNewElement, store } = React.useContext(LevaContext);
+  const { set, controls, observeNewElement, store, selectedElement } = React.useContext(LevaContext);
   const { current: id } = useRef(v4())
   const [element, setElement] = useState<HTMLElement | null>(null)
   const ref = (element: HTMLElement | null) => {
@@ -50,13 +50,20 @@ function useObservableState<S extends Schema>(initialState: S): UseObservableSta
   console.log(storeId)
 
   const pushToLeva = useCallback((state: S) => { set(state) }, [set]);
-  const safeToPull = useMemo(() => storeId && id && storeId === id, [controls.id])
+  /*
+    first the selected element changes. 
+    then the store gets updated through a push
+    then the controls change
+
+    we need to make sure all three things have happened before  pulling
+  */
+  const safeToPull = useMemo(() => id && controls.id === id && element === selectedElement, [element, selectedElement, controls.id, id])
 
   // pull whenever controls change
   useEffect(() => {
     // console.log(controls)
     if (safeToPull) {
-      // console.log(safeToPull)
+      console.log('d:', { controls, state })
       // console.log(controls)
       setState(controls as S)
     }
@@ -96,10 +103,14 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const store = useCreateStore()
-  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
-  const [schema, setSchema] = useState<Schema>({});
+  const [{ schema, selectedElement }, setProviderState] = useState<{
+    selectedElement: HTMLElement | null,
+    schema: Schema
+  }>({
+    selectedElement: null,
+    schema: {}
+  })
   const [controls, set] = useControls(() => (schema), { store }, [schema]);
-
 
 
   console.log({ controls })
@@ -112,9 +123,10 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [schema, set])
 
   const observeNewElement = (newControls: Schema, newElement: HTMLElement) => {
-    // console.log(newControls);
-    setSchema(newControls);
-    setSelectedElement(newElement);
+    setProviderState({
+      schema: newControls,
+      selectedElement: newElement
+    });
   }
 
   return (
@@ -123,7 +135,8 @@ const LevaProvider: React.FC<{ children: React.ReactNode }> = ({
         controls,
         set,
         observeNewElement,
-        store
+        store,
+        selectedElement
       }}
     >
       <LevaPanel store={store} />
@@ -150,6 +163,7 @@ const TestComponent = () => {
     width: "100px",
   });
 
+
   return (
     // <observable.div/>
     <div
@@ -158,6 +172,7 @@ const TestComponent = () => {
         height: state.height,
         width: state.width,
         backgroundColor: state.color,
+        borderRadius: state.borderRadius ?? ''
       }}
     ></div>
   );
@@ -196,11 +211,6 @@ const AppV3 = () => {
   );
 };
 
-export default AppV3;
-
-
-
-
 const AppV4 = () => {
   const store = useCreateStore();
   const zustandStore = store.useStore();
@@ -238,3 +248,5 @@ const AppV4 = () => {
     </>
   );
 };
+
+export default AppV3;
