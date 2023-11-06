@@ -8,9 +8,10 @@ import React, {
 import { Schema } from "leva/dist/declarations/src/types";
 import { v4 } from "uuid";
 import { LevaContext } from "./LevaProvider";
+import { DisplayObject } from "pixi.js";
 
 export interface UseObservableState<S extends Schema> {
-  ref: (element: HTMLElement | null) => void
+  setRef: (element: DisplayObject | null) => void
   state: S;
   setState: (value: S) => void;
 }
@@ -20,10 +21,12 @@ export function useObservableState<S extends Schema>(initialState: S): UseObserv
   const [state, setState] = useState<S>(initialState);
   const { set, controls, observeNewElement, selectedElement } = React.useContext(LevaContext);
   const { current: id } = useRef(v4())
-  const [element, setElement] = useState<HTMLElement | null>(null)
-  const ref = (element: HTMLElement | null) => {
+  const [element, setElement] = useState<DisplayObject | null>(null)
+  const setRef = (element: DisplayObject | null) => {
     setElement(element)
   }
+
+  console.log("debug observeNewElement in useObservableState", observeNewElement);
 
   const pushToLeva = useCallback((state: S) => { set(state) }, [set]);
   /*
@@ -42,23 +45,30 @@ export function useObservableState<S extends Schema>(initialState: S): UseObserv
     }
   }, [controls, safeToPull]);
 
+  console.log("observeNewElement in LevaProvider PIXI", observeNewElement);
 
-
+  // redesign this for a pixi DisplayObject
   useEffect(() => {
-    const clickHandler = () => element ? observeNewElement({ id, ...state }, element) : undefined
+    const clickHandler = () => {
+      if (element) {
+        console.log('observe new element:', element);
+        observeNewElement({ id, ...state }, element);
+      }
+    };
     if (element) {
-      element.addEventListener('click', clickHandler);
+      console.log(element)
+      element.on('click', clickHandler);
     }
     return () => {
-      if (element && clickHandler) {
-        element.removeEventListener('click', clickHandler);
+      if (element) {
+        element.off('click', clickHandler);
       }
     };
   }, [state, element, id, observeNewElement])
 
 
   return {
-    ref,
+    setRef,
     state,
     setState: () => {
       setState(state); // this line is suspect

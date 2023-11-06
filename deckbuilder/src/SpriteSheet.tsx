@@ -2,17 +2,30 @@ import { Sprite } from '@pixi/react';
 import spritesheet from './assets/spritesheet';
 import * as PIXI from 'pixi.js';
 import { useCallback, useRef, useState, ComponentProps } from 'react';
+import { useObservableState } from './leva-pixi';
 
 
 type DraggableSpriteProps = ComponentProps<typeof Sprite> & {
   x?: number;
   y?: number;
   anchor?: number;
+  levaRef?: PIXI.DisplayObject | null;
 }
 
 export function DraggableSprite({ anchor = 0.5, x = 100, y = 100, ...props }: DraggableSpriteProps) {
   const sprite = useRef<PIXI.Sprite>(null);
   const [position, setPosition] = useState({ x, y });
+
+  const { state, setRef, setState } = useObservableState({
+    tint: props.tint as string || "#fff",
+    // texture: "bg-blue", // how to make this an option?
+    scale: props.scale as number || 3,
+  })
+
+  const setRefs = useCallback((node: PIXI.Sprite | null) => {
+    sprite.current = node;
+    setRef(node);
+  }, [setRef]);
 
   const onDown = (e: PIXI.FederatedPointerEvent) => {
     sprite.current!.alpha = 0.5;
@@ -37,8 +50,10 @@ export function DraggableSprite({ anchor = 0.5, x = 100, y = 100, ...props }: Dr
 
   return (
     <Sprite
-      ref={sprite}
+      ref={setRefs}
       anchor={anchor}
+      tint={state.tint}
+      scale={state.scale}
       {...props}
       eventMode="dynamic"
       position={position}
@@ -54,8 +69,8 @@ export default function SpriteSheet() {
   return (
     <DraggableSprite
       tint={"#fff"}
-      texture={spritesheet.textures['bg-blue']}
       scale={3}
+      texture={spritesheet.textures['bg-blue']}
     />
   )
 }
