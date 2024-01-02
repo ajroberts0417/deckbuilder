@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import cardDatabase, { Cards } from "./cards";
-import { _shuffle, _randomCard } from "../utils";
+import { _shuffle, _randomCard, createCycle } from "../utils";
 
 // card database = all the unique cards that exist in the game
 // card collection = one player's collection of cards
@@ -62,7 +62,26 @@ function initializeDeck(deckList) {
   return _shuffle(deck) // in-place modification
 }
 
+// TODO: i can just simplify it this way if it would save memory
+// ['player 1', 'start']
+//given this player and phase, what is the next player and phase?
+const players = ['player1', 'player2'];
+const [currentPlayer, incrementPlayer] = createCycle(players);
+
+const phases = ['start', 'draw', 'play', 'end'];
+const [currentPhase, incrementPhase] = createCycle(phases);
+
+const [turnCount, setTurn] = createSignal(0);
+
+const initialTurnState = {
+  turnCount,
+  currentPlayer,
+  currentPhase,
+}
+// const [currentPhase, setCurrentPhase] = createSignal(0);
+
 const initialGameState = {
+  turn: initialTurnState,
   deck: initializeDeck(deckList),
   hand: [],
   discard: [],
@@ -70,6 +89,8 @@ const initialGameState = {
   selected: [],
   gameIndex: gameIndex,
 }
+
+// const endTurn =
 
 // usage:
 // import { gameState, setGameState } from "./state";

@@ -1,0 +1,14 @@
+{
+  "name": "vanilla-deckbuilder",
+  "version": "1.0.0",
+  "description": "",
+  "main": "deckbuilder.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "andrew + liam (general software)",
+  "license": "ISC",
+  "dependencies": {
+    "solid": "^0.2.1"
+  }
+}

@@ -6,6 +6,6 @@ import LevaExample from './leva-admin/LevaExample'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Game />
+    <LevaExample />
   </React.StrictMode>,
 )

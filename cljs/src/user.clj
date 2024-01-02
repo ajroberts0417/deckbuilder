@@ -5,3 +5,5 @@
 
 (defn cljs []
   (shadow/repl :app))
+
+(+ 2 2)

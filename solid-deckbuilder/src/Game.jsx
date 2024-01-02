@@ -2,6 +2,9 @@ import { draw, drawX, discardRandom } from './actions';
 import { gameState } from './data/state';
 
 
+// todo:
+// - add 2 players
+// - add turns
 function App() {
 
   return (

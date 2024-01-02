@@ -83,3 +83,35 @@ export function discardRandomX(x) {
     discardRandom();
   }
 }
+
+export function endTurn() {
+  const { turn, hand, discard } = gameState;
+  // discard the hand
+  const nextDiscard = [...discard, ...hand];
+  // draw 5 cards
+  const nextHand = [];
+  drawX(5);
+  // increment the turn
+  const nextTurn = {
+    ...turn,
+    turnCount: turn.turnCount + 1,
+  }
+  setGameState({
+    ...gameState,
+    turn: nextTurn,
+    hand: nextHand,
+    discard: nextDiscard,
+  });
+}
+
+// you can use this to see which actions are available for your phase.
+const actions = {
+  'start': {},
+  'draw': {},
+  'play': {
+    'draw': draw,
+    'discard': discardRandom,
+    'endTurn': endTurn,
+  },
+  'end': {},
+}
